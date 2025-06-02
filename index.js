@@ -5,9 +5,12 @@ require('dotenv').config();
 const app = express();
 app.use(express.json());
 
-const getAirtableValue = async (rowNumber) => {
+const PORT = process.env.PORT || 3000;
+
+// 🔧 Get value from Airtable row based on dynamic table
+const getAirtableValue = async (tableName, rowNumber) => {
   try {
-    const res = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${process.env.AIRTABLE_TABLE_NAME}`, {
+    const res = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`, {
       headers: {
         Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`
       },
@@ -24,43 +27,61 @@ const getAirtableValue = async (rowNumber) => {
   }
 };
 
+// 📦 Webhook route for Shopify product creation
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
-  const randomNumber = Math.floor(Math.random() * 100) + 1;
-  const ecoFabric = await getAirtableValue(randomNumber);
+
+  const random1 = Math.floor(Math.random() * 100) + 1;
+  const random2 = Math.floor(Math.random() * 100) + 1;
+
+  let tableName;
 
   try {
-    // Save the random number first
-    await axios.post(
+    // STEP 1: Read metafields to get color_family
+    const metafieldsRes = await axios.get(
       `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
       {
-        metafield: {
-          namespace: "custom",
-          key: "random_number",
-          type: "number_integer",
-          value: randomNumber
-        }
-      },
-      {
         headers: {
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN,
-          "Content-Type": "application/json"
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN
         }
       }
     );
 
-    // Then save the Airtable-based metafield
-    if (ecoFabric) {
+    const colorMetafield = metafieldsRes.data.metafields.find(
+      mf => mf.namespace === 'custom' && mf.key === 'color_family'
+    );
+
+    if (!colorMetafield) {
+      throw new Error("Missing metafield: custom.color_family");
+    }
+
+    tableName = colorMetafield.value.trim();
+  } catch (err) {
+    console.error("Error fetching color_family metafield:", err.message);
+    return res.status(400).send("Missing or invalid color_family metafield");
+  }
+
+  try {
+    // STEP 2: Write both random numbers to Shopify metafields
+    const metafieldPayloads = [
+      {
+        namespace: "custom",
+        key: "random_number_1",
+        type: "number_integer",
+        value: random1
+      },
+      {
+        namespace: "custom",
+        key: "random_number_2",
+        type: "number_integer",
+        value: random2
+      }
+    ];
+
+    for (const metafield of metafieldPayloads) {
       await axios.post(
         `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
-        {
-          metafield: {
-            namespace: "custom",
-            key: "material_detail",
-            type: "single_line_text_field",
-            value: ecoFabric
-          }
-        },
+        { metafield },
         {
           headers: {
             "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN,
@@ -70,16 +91,18 @@ app.post('/webhooks/product-create', async (req, res) => {
       );
     }
 
-    res.status(200).send("Metafields updated");
+    res.status(200).send("Random number metafields added");
   } catch (err) {
-    console.error("Shopify metafield error:", err.response?.data || err.message);
-    res.status(500).send("Error updating metafields");
+    console.error("Shopify metafield error:", err.message);
+    res.status(500).send("Failed to update metafields");
   }
 });
 
+// ✅ Simple homepage route
 app.get('/', (req, res) => {
-  res.send('Shopify metafield updater is running.');
+  res.send('✅ Shopify random number metafield updater is running.');
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
