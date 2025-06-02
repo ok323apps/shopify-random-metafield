@@ -7,21 +7,41 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Descriptive → base color mapping
+// Expanded color map
 const colorMap = {
+  // Greens
   Sage: "Green", Olive: "Green", Emerald: "Green", Mint: "Green", Forest: "Green",
-  Navy: "Blue", Sky: "Blue", Azure: "Blue", Denim: "Blue", Indigo: "Blue",
+
+  // Blues
+  Navy: "Blue", Sky: "Blue", Azure: "Blue", Denim: "Blue", Indigo: "Blue", Teal: "Blue",
+
+  // Grays
   Charcoal: "Gray", Silver: "Gray", Ash: "Gray", Slate: "Gray",
+
+  // Whites
   Ivory: "White", Snow: "White", Pearl: "White",
+
+  // Browns
   Sand: "Brown", Mocha: "Brown", Cocoa: "Brown", Caramel: "Brown",
-  Rose: "Red", Berry: "Red", Crimson: "Red", Ruby: "Red",
-  Coral: "Orange", Peach: "Orange", Tangerine: "Orange", Amber: "Orange",
+  Oatmeal: "Brown", Beige: "Brown", Taupe: "Brown",
+
+  // Reds
+  Rose: "Red", Berry: "Red", Crimson: "Red", Ruby: "Red", Blush: "Red",
+
+  // Oranges
+  Coral: "Orange", Peach: "Orange", Tangerine: "Orange", Amber: "Orange", Rust: "Orange", Copper: "Orange",
+
+  // Yellows
   Lemon: "Yellow", Gold: "Yellow", Mustard: "Yellow",
+
+  // Purples
+  Lilac: "Purple", Mauve: "Purple",
+
+  // Primary colors
   Black: "Black", White: "White", Gray: "Gray", Brown: "Brown",
   Red: "Red", Blue: "Blue", Green: "Green", Orange: "Orange", Yellow: "Yellow"
 };
 
-// Get color from Shopify variant options
 const getColorFromVariantOption = (product) => {
   const colorOptionIndex = product.options.findIndex(
     o => o.name.toLowerCase() === "color"
@@ -37,7 +57,6 @@ const getColorFromVariantOption = (product) => {
   return colorValue || null;
 };
 
-// Fallback to Imagga API if no variant color is detected
 const getColorFromImagga = async (imageUrl) => {
   const apiKey = "acc_d8ec2c08e6811bf";
   const apiSecret = "9cd900bcc3dce192f34dfc49db174b16";
@@ -60,7 +79,6 @@ const getColorFromImagga = async (imageUrl) => {
   }
 };
 
-// Get color name from Airtable based on base color and row #
 const getColorFromAirtable = async (tableName, rowNumber) => {
   try {
     const res = await axios.get(
@@ -82,7 +100,6 @@ const getColorFromAirtable = async (tableName, rowNumber) => {
   }
 };
 
-// Main webhook handler
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
 
@@ -151,7 +168,7 @@ app.post('/webhooks/product-create', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('✅ Shopify Color Webhook with Imagga is Live!');
+  res.send('✅ Shopify Color Webhook (Expanded Colors) is Live!');
 });
 
 app.listen(PORT, () => {
