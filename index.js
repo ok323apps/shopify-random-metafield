@@ -93,20 +93,21 @@ app.post('/webhooks/product-create', async (req, res) => {
     const ecoFabric = await getAirtableValue(colorName, random1);
 
     // 🔹 Step 3: Write random numbers and eco_fabric to metafields
-    const metafields = [
-      {
-        namespace: "custom",
-        key: "random_number_1",
-        type: "number_integer",
-        value: random1
-      },
-      {
-        namespace: "custom",
-        key: "random_number_2",
-        type: "number_integer",
-        value: random2
-      }
-    ];
+   const metafields = [
+  {
+    namespace: "custom",
+    key: "random_number_1",
+    type: "single_line_text_field",
+    value: String(random1)
+  },
+  {
+    namespace: "custom",
+    key: "random_number_2",
+    type: "single_line_text_field",
+    value: String(random2)
+  }
+];
+
 
     if (ecoFabric) {
       metafields.push({
