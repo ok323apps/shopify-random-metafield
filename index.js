@@ -1,5 +1,7 @@
 const express = require('express');
 const axios = require('axios');
+const ColorThief = require('colorthief');
+const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
@@ -7,7 +9,35 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// 🔧 Get value from Airtable using dynamic table name and row number
+// 🎨 Helper: Map RGB to a basic color
+const rgbToColorName = (rgb) => {
+  const [r, g, b] = rgb;
+
+  if (r > 200 && g < 100 && b < 100) return "Red";
+  if (g > 200 && r < 100 && b < 100) return "Green";
+  if (b > 200 && r < 100 && g < 100) return "Blue";
+  if (r > 200 && g > 150 && b < 100) return "Orange";
+  if (r > 240 && g > 240 && b > 240) return "White";
+  if (r < 50 && g < 50 && b < 50) return "Black";
+  if (r > 200 && g > 200 && b > 200) return "Gray";
+
+  return "Other";
+};
+
+// 🔧 Optional: fetch a dominant color from image URL
+const getDominantColorName = async (imageUrl) => {
+  try {
+    const response = await fetch(imageUrl);
+    const buffer = await response.buffer();
+    const rgb = await ColorThief.getColor(buffer);
+    return rgbToColorName(rgb);
+  } catch (err) {
+    console.error("Color detection failed:", err.message);
+    return "Unknown";
+  }
+};
+
+// 🔧 Airtable lookup
 const getAirtableValue = async (tableName, rowNumber) => {
   try {
     const res = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`, {
@@ -27,42 +57,42 @@ const getAirtableValue = async (tableName, rowNumber) => {
   }
 };
 
+// 📦 Shopify webhook route
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
-
   const random1 = Math.floor(Math.random() * 100) + 1;
   const random2 = Math.floor(Math.random() * 100) + 1;
 
-  let tableName;
+  const featuredImageUrl = product?.images?.[0]?.src;
+  const colorName = featuredImageUrl
+    ? await getDominantColorName(featuredImageUrl)
+    : "Unknown";
 
   try {
-    // STEP 1: Fetch all product metafields
-    const metafieldsRes = await axios.get(
+    // 🟦 Step 1: Update custom.product_color based on image
+    await axios.post(
       `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
       {
+        metafield: {
+          namespace: "custom",
+          key: "product_color",
+          type: "single_line_text_field",
+          value: colorName
+        }
+      },
+      {
         headers: {
-          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN
+          "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN,
+          "Content-Type": "application/json"
         }
       }
     );
 
-    const colorMetafield = metafieldsRes.data.metafields.find(
-      mf => mf.namespace === 'custom' && mf.key === 'product_color'
-    );
+    // 🟩 Step 2: Lookup Airtable using detected color
+    const ecoFabric = await getAirtableValue(colorName, random1);
 
-    if (!colorMetafield || !colorMetafield.value) {
-      throw new Error("Missing metafield: custom.product_color");
-    }
-
-    tableName = colorMetafield.value.trim();
-  } catch (err) {
-    console.error("Error fetching product_color metafield:", err.message);
-    return res.status(400).send("Missing or invalid product_color metafield");
-  }
-
-  try {
-    // STEP 2: Write random_number_1 and random_number_2
-    const metafieldPayloads = [
+    // 🟨 Step 3: Write random numbers + eco fabric
+    const metafields = [
       {
         namespace: "custom",
         key: "random_number_1",
@@ -77,7 +107,16 @@ app.post('/webhooks/product-create', async (req, res) => {
       }
     ];
 
-    for (const metafield of metafieldPayloads) {
+    if (ecoFabric) {
+      metafields.push({
+        namespace: "custom",
+        key: "material_detail",
+        type: "single_line_text_field",
+        value: ecoFabric
+      });
+    }
+
+    for (const metafield of metafields) {
       await axios.post(
         `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
         { metafield },
@@ -90,16 +129,15 @@ app.post('/webhooks/product-create', async (req, res) => {
       );
     }
 
-    res.status(200).send("Metafields updated successfully");
+    res.status(200).send("Metafields updated with color and random numbers");
   } catch (err) {
-    console.error("Shopify metafield update error:", err.message);
+    console.error("Shopify update error:", err.message);
     res.status(500).send("Failed to update metafields");
   }
 });
 
-// Health check route
 app.get('/', (req, res) => {
-  res.send('✅ Shopify metafield updater is live.');
+  res.send('🎨 Shopify image color + metafield updater is live.');
 });
 
 app.listen(PORT, () => {
