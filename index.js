@@ -1,7 +1,5 @@
 const express = require('express');
 const axios = require('axios');
-const ColorThief = require('colorthief');
-const fetch = require('node-fetch');
 require('dotenv').config();
 
 const app = express();
@@ -9,95 +7,60 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Map descriptive color values to Airtable base colors
+// Descriptive → base color mapping
 const colorMap = {
-  Sage: "Green",
-  Olive: "Green",
-  Emerald: "Green",
-  Mint: "Green",
-  Navy: "Blue",
-  Sky: "Blue",
-  Azure: "Blue",
-  Denim: "Blue",
-  Charcoal: "Gray",
-  Silver: "Gray",
-  Ash: "Gray",
-  Ivory: "White",
-  Snow: "White",
-  Pearl: "White",
-  Sand: "Brown",
-  Mocha: "Brown",
-  Cocoa: "Brown",
-  Rose: "Red",
-  Berry: "Red",
-  Crimson: "Red",
-  Coral: "Orange",
-  Peach: "Orange",
-  Tangerine: "Orange",
-  Lemon: "Yellow",
-  Gold: "Yellow",
-  Mustard: "Yellow",
-  Black: "Black",
-  White: "White",
-  Gray: "Gray",
-  Brown: "Brown",
-  Red: "Red",
-  Blue: "Blue",
-  Green: "Green",
-  Orange: "Orange",
-  Yellow: "Yellow"
+  Sage: "Green", Olive: "Green", Emerald: "Green", Mint: "Green", Forest: "Green",
+  Navy: "Blue", Sky: "Blue", Azure: "Blue", Denim: "Blue", Indigo: "Blue",
+  Charcoal: "Gray", Silver: "Gray", Ash: "Gray", Slate: "Gray",
+  Ivory: "White", Snow: "White", Pearl: "White",
+  Sand: "Brown", Mocha: "Brown", Cocoa: "Brown", Caramel: "Brown",
+  Rose: "Red", Berry: "Red", Crimson: "Red", Ruby: "Red",
+  Coral: "Orange", Peach: "Orange", Tangerine: "Orange", Amber: "Orange",
+  Lemon: "Yellow", Gold: "Yellow", Mustard: "Yellow",
+  Black: "Black", White: "White", Gray: "Gray", Brown: "Brown",
+  Red: "Red", Blue: "Blue", Green: "Green", Orange: "Orange", Yellow: "Yellow"
 };
 
-// Try to find the 'Color' value from product options
+// Get color from Shopify variant options
 const getColorFromVariantOption = (product) => {
   const colorOptionIndex = product.options.findIndex(
     o => o.name.toLowerCase() === "color"
   );
-
   if (colorOptionIndex === -1) return null;
 
   const variantWithImage = product.variants.find(v =>
     product.images.some(img => img.variant_ids?.includes(v.id))
   );
-
   const variant = variantWithImage || product.variants[0];
   const colorValue = variant[`option${colorOptionIndex + 1}`];
 
   return colorValue || null;
 };
 
-// Convert an RGB array into a base color name
-const rgbToColorName = (rgb) => {
-  const [r, g, b] = rgb;
-  if (r > 180 && g < 100 && b < 100) return "Red";
-  if (g > 180 && r < 120 && b < 120) return "Green";
-  if (b > 180 && r < 120 && g < 120) return "Blue";
-  if (r > 200 && g > 140 && b < 100) return "Orange";
-  if (r > 220 && g > 220 && b > 220) return "White";
-  if (r < 70 && g < 70 && b < 70) return "Black";
-  if (r > 160 && g > 160 && b > 160) return "Gray";
+// Fallback to Imagga API if no variant color is detected
+const getColorFromImagga = async (imageUrl) => {
+  const apiKey = "acc_d8ec2c08e6811bf";
+  const apiSecret = "9cd900bcc3dce192f34dfc49db174b16";
+  const encoded = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
 
-  if (r > g && r > b) return "Red";
-  if (g > r && g > b) return "Green";
-  if (b > r && b > g) return "Blue";
-
-  return "Other";
-};
-
-// Use ColorThief to detect color if variant option isn't available
-const getDominantColorName = async (imageUrl) => {
   try {
-    const response = await fetch(imageUrl);
-    const buffer = await response.buffer();
-    const rgb = await ColorThief.getColor(buffer);
-    return rgbToColorName(rgb);
+    const response = await axios.get(
+      `https://api.imagga.com/v2/colors?image_url=${encodeURIComponent(imageUrl)}`,
+      {
+        headers: { Authorization: `Basic ${encoded}` }
+      }
+    );
+
+    const tags = response.data.result.colors.image_colors;
+    const firstTag = tags?.[0]?.closest_palette_color_parent;
+    return firstTag || "Other";
   } catch (err) {
-    console.error("ColorThief failed:", err.message);
+    console.error("Imagga color detection error:", err.response?.data || err.message);
     return "Other";
   }
 };
 
-// Fetch color word from Airtable using row number
+// Get color name from Airtable based on base color and row #
 const getColorFromAirtable = async (tableName, rowNumber) => {
   try {
     const res = await axios.get(
@@ -119,7 +82,7 @@ const getColorFromAirtable = async (tableName, rowNumber) => {
   }
 };
 
-// Main Shopify webhook handler
+// Main webhook handler
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
 
@@ -129,11 +92,10 @@ app.post('/webhooks/product-create', async (req, res) => {
   let colorValue = getColorFromVariantOption(product);
   let baseColor = colorMap[colorValue] || null;
 
-  // Fallback to image detection if color not found in variant
-  if (!baseColor) {
-    const imageUrl = product.images?.[0]?.src;
-    baseColor = imageUrl ? await getDominantColorName(imageUrl) : "Other";
-    colorValue = baseColor;
+  if (!baseColor && product.images?.[0]?.src) {
+    const fallbackColor = await getColorFromImagga(product.images[0].src);
+    baseColor = colorMap[fallbackColor] || fallbackColor;
+    colorValue = fallbackColor;
   }
 
   const color1 = await getColorFromAirtable(baseColor, random1);
@@ -181,7 +143,7 @@ app.post('/webhooks/product-create', async (req, res) => {
       );
     }
 
-    res.status(200).send("Metafields updated based on variant or image color.");
+    res.status(200).send("Metafields updated.");
   } catch (err) {
     console.error("Shopify metafield update error:", err.message);
     res.status(500).send("Failed to update metafields.");
@@ -189,7 +151,7 @@ app.post('/webhooks/product-create', async (req, res) => {
 });
 
 app.get('/', (req, res) => {
-  res.send('🎨 Shopify color-detection webhook is running!');
+  res.send('✅ Shopify Color Webhook with Imagga is Live!');
 });
 
 app.listen(PORT, () => {
