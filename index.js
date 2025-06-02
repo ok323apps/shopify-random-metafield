@@ -7,7 +7,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// 🔧 Get value from Airtable row based on dynamic table
+// 🔧 Get value from Airtable using dynamic table name and row number
 const getAirtableValue = async (tableName, rowNumber) => {
   try {
     const res = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`, {
@@ -27,7 +27,6 @@ const getAirtableValue = async (tableName, rowNumber) => {
   }
 };
 
-// 📦 Webhook route for Shopify product creation
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
 
@@ -37,7 +36,7 @@ app.post('/webhooks/product-create', async (req, res) => {
   let tableName;
 
   try {
-    // STEP 1: Read metafields to get color_family
+    // STEP 1: Fetch all product metafields
     const metafieldsRes = await axios.get(
       `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
       {
@@ -48,21 +47,21 @@ app.post('/webhooks/product-create', async (req, res) => {
     );
 
     const colorMetafield = metafieldsRes.data.metafields.find(
-      mf => mf.namespace === 'custom' && mf.key === 'color_family'
+      mf => mf.namespace === 'custom' && mf.key === 'product_color'
     );
 
-    if (!colorMetafield) {
-      throw new Error("Missing metafield: custom.color_family");
+    if (!colorMetafield || !colorMetafield.value) {
+      throw new Error("Missing metafield: custom.product_color");
     }
 
     tableName = colorMetafield.value.trim();
   } catch (err) {
-    console.error("Error fetching color_family metafield:", err.message);
-    return res.status(400).send("Missing or invalid color_family metafield");
+    console.error("Error fetching product_color metafield:", err.message);
+    return res.status(400).send("Missing or invalid product_color metafield");
   }
 
   try {
-    // STEP 2: Write both random numbers to Shopify metafields
+    // STEP 2: Write random_number_1 and random_number_2
     const metafieldPayloads = [
       {
         namespace: "custom",
@@ -91,16 +90,16 @@ app.post('/webhooks/product-create', async (req, res) => {
       );
     }
 
-    res.status(200).send("Random number metafields added");
+    res.status(200).send("Metafields updated successfully");
   } catch (err) {
-    console.error("Shopify metafield error:", err.message);
+    console.error("Shopify metafield update error:", err.message);
     res.status(500).send("Failed to update metafields");
   }
 });
 
-// ✅ Simple homepage route
+// Health check route
 app.get('/', (req, res) => {
-  res.send('✅ Shopify random number metafield updater is running.');
+  res.send('✅ Shopify metafield updater is live.');
 });
 
 app.listen(PORT, () => {
