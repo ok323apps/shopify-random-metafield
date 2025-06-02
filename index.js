@@ -115,15 +115,20 @@ app.post('/webhooks/product-create', async (req, res) => {
     color2
   });
 
-  const metafields = [
-    { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
-    { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
-    { namespace: 'custom', key: 'random_number_2', type: 'single_line_text_field', value: String(random2) },
-    { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords },
-    { namespace: 'custom', key: 'gender', type: 'single_line_text_field', value: 'Unisex' }, // fallback for now
-    { namespace: 'custom', key: 'material_multi', type: 'single_line_text_field', value: 'Organic Cotton' },
-    { namespace: 'custom', key: 'style', type: 'single_line_text_field', value: 'T-Shirt' }
-  ];
+// Assume `product` is your Shopify product object with metafields already loaded
+const gender = product.metafields?.custom?.gender?.value || 'Unisex';
+const materialMulti = product.metafields?.custom?.material_multi?.value || 'Organic Cotton';
+const style = product.metafields?.custom?.style?.value || 'T-Shirt';
+
+const metafields = [
+  { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
+  { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
+  { namespace: 'custom', key: 'random_number_2', type: 'single_line_text_field', value: String(random2) },
+  { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords },
+  { namespace: 'custom', key: 'gender', type: 'single_line_text_field', value: gender },
+  { namespace: 'custom', key: 'material_multi', type: 'single_line_text_field', value: materialMulti },
+  { namespace: 'custom', key: 'style', type: 'single_line_text_field', value: style }
+];
 
   try {
     for (const metafield of metafields) {
