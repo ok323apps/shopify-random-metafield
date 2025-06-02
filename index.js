@@ -9,7 +9,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// 🎨 Helper: Map RGB to a basic color
+// 🎨 Convert RGB to basic color name
 const rgbToColorName = (rgb) => {
   const [r, g, b] = rgb;
 
@@ -24,7 +24,7 @@ const rgbToColorName = (rgb) => {
   return "Other";
 };
 
-// 🔧 Optional: fetch a dominant color from image URL
+// 🖼️ Get dominant color name from image URL
 const getDominantColorName = async (imageUrl) => {
   try {
     const response = await fetch(imageUrl);
@@ -37,7 +37,7 @@ const getDominantColorName = async (imageUrl) => {
   }
 };
 
-// 🔧 Airtable lookup
+// 📄 Get eco_fabric from Airtable
 const getAirtableValue = async (tableName, rowNumber) => {
   try {
     const res = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`, {
@@ -57,9 +57,10 @@ const getAirtableValue = async (tableName, rowNumber) => {
   }
 };
 
-// 📦 Shopify webhook route
+// 🚀 Shopify Product Creation Webhook
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
+
   const random1 = Math.floor(Math.random() * 100) + 1;
   const random2 = Math.floor(Math.random() * 100) + 1;
 
@@ -69,7 +70,7 @@ app.post('/webhooks/product-create', async (req, res) => {
     : "Unknown";
 
   try {
-    // 🟦 Step 1: Update custom.product_color based on image
+    // 🔹 Step 1: Update custom.product_color
     await axios.post(
       `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
       {
@@ -88,10 +89,10 @@ app.post('/webhooks/product-create', async (req, res) => {
       }
     );
 
-    // 🟩 Step 2: Lookup Airtable using detected color
+    // 🔹 Step 2: Lookup Airtable using detected color
     const ecoFabric = await getAirtableValue(colorName, random1);
 
-    // 🟨 Step 3: Write random numbers + eco fabric
+    // 🔹 Step 3: Write random numbers and eco_fabric to metafields
     const metafields = [
       {
         namespace: "custom",
@@ -136,6 +137,7 @@ app.post('/webhooks/product-create', async (req, res) => {
   }
 });
 
+// Health check
 app.get('/', (req, res) => {
   res.send('🎨 Shopify image color + metafield updater is live.');
 });
