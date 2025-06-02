@@ -123,7 +123,7 @@ app.post('/webhooks/product-create', async (req, res) => {
     combinedNatureWords = [color1, color2].filter(Boolean).join(" ") || "Unknown";
   }
 
-  console.log("🎨 Nature Words Lookup:", { baseColor, random1, random2, color1, color2 });
+  console.log("🎨 Nature Words Lookup:", { random1, random2, baseColor, color1, color2 });
 
   const metafields = [
     { namespace: "custom", key: "random_number_1", type: "single_line_text_field", value: String(random1) },
