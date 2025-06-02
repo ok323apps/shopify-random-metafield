@@ -7,170 +7,78 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// Expanded color map
-const colorMap = {
-  // Greens
-  Sage: "Green", Olive: "Green", Emerald: "Green", Mint: "Green", Forest: "Green",
+// Step 1: Allowed normalized colors
+const allowedColors = [
+  "White", "Green", "Blue", "Purple", "Pink", "Light Brown", "Dark Red"
+];
 
-  // Blues
-  Navy: "Blue", Sky: "Blue", Azure: "Blue", Denim: "Blue", Indigo: "Blue", Teal: "Blue",
-
-  // Grays
-  Charcoal: "Gray", Silver: "Gray", Ash: "Gray", Slate: "Gray",
-
-  // Whites
-  Ivory: "White", Snow: "White", Pearl: "White",
-
-  // Browns
-  Sand: "Brown", Mocha: "Brown", Cocoa: "Brown", Caramel: "Brown",
-  Oatmeal: "Brown", Beige: "Brown", Taupe: "Brown",
-
-  // Reds
-  Rose: "Red", Berry: "Red", Crimson: "Red", Ruby: "Red", Blush: "Red",
-
-  // Oranges
-  Coral: "Orange", Peach: "Orange", Tangerine: "Orange", Amber: "Orange", Rust: "Orange", Copper: "Orange",
-
-  // Yellows
-  Lemon: "Yellow", Gold: "Yellow", Mustard: "Yellow",
-
-  // Purples
-  Lilac: "Purple", Mauve: "Purple",
-
-  // Primary colors
-  Black: "Black", White: "White", Gray: "Gray", Brown: "Brown",
-  Red: "Red", Blue: "Blue", Green: "Green", Orange: "Orange", Yellow: "Yellow"
+// Step 2: Raw → Clean mapping
+const colorNormalizationMap = {
+  Oatmeal: "Light Brown",
+  Beige: "Light Brown",
+  Taupe: "Light Brown",
+  Mocha: "Light Brown",
+  Cocoa: "Light Brown",
+  Blush: "Pink",
+  Rose: "Pink",
+  Berry: "Pink",
+  Crimson: "Dark Red",
+  Ruby: "Dark Red",
+  Burgundy: "Dark Red",
+  Sky: "Blue",
+  Azure: "Blue",
+  Sage: "Green",
+  Olive: "Green",
+  Mint: "Green",
+  Emerald: "Green",
+  Lilac: "Purple",
+  Mauve: "Purple",
+  Ivory: "White",
+  Snow: "White",
+  Pearl: "White"
 };
 
-const getColorFromVariantOption = (product) => {
+// Base color for Airtable mapping
+const colorMap = {
+  White: "White", Green: "Green", Blue: "Blue",
+  Purple: "Purple", Pink: "Red", "Light Brown": "Brown", "Dark Red": "Red"
+};
+
+// Normalize variant color values on creation
+const normalizeVariantColors = async (product) => {
   const colorOptionIndex = product.options.findIndex(
     o => o.name.toLowerCase() === "color"
   );
-  if (colorOptionIndex === -1) return null;
 
-  const variantWithImage = product.variants.find(v =>
-    product.images.some(img => img.variant_ids?.includes(v.id))
-  );
-  const variant = variantWithImage || product.variants[0];
-  const colorValue = variant[`option${colorOptionIndex + 1}`];
+  if (colorOptionIndex === -1) return;
 
-  return colorValue || null;
-};
+  for (const variant of product.variants) {
+    const originalColor = variant[`option${colorOptionIndex + 1}`];
+    const normalized = colorNormalizationMap[originalColor] || originalColor;
 
-const getColorFromImagga = async (imageUrl) => {
-  const apiKey = "acc_d8ec2c08e6811bf";
-  const apiSecret = "9cd900bcc3dce192f34dfc49db174b16";
-  const encoded = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+    if (!allowedColors.includes(normalized)) continue;
 
-  try {
-    const response = await axios.get(
-      `https://api.imagga.com/v2/colors?image_url=${encodeURIComponent(imageUrl)}`,
-      {
-        headers: { Authorization: `Basic ${encoded}` }
-      }
-    );
-
-    const tags = response.data.result.colors.image_colors;
-    const firstTag = tags?.[0]?.closest_palette_color_parent;
-    return firstTag || "Other";
-  } catch (err) {
-    console.error("Imagga color detection error:", err.response?.data || err.message);
-    return "Other";
-  }
-};
-
-const getColorFromAirtable = async (tableName, rowNumber) => {
-  try {
-    const res = await axios.get(
-      `https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`,
-      {
-        headers: {
-          Authorization: `Bearer ${process.env.AIRTABLE_API_KEY}`
-        },
-        params: {
-          maxRecords: 1,
-          filterByFormula: `{Row} = ${rowNumber}`
-        }
-      }
-    );
-    return res.data.records[0]?.fields?.Color || null;
-  } catch (err) {
-    console.error(`Airtable fetch error for ${rowNumber} in table ${tableName}:`, err.response?.data || err.message);
-    return null;
-  }
-};
-
-app.post('/webhooks/product-create', async (req, res) => {
-  const product = req.body;
-
-  const random1 = Math.floor(Math.random() * 100) + 1;
-  const random2 = Math.floor(Math.random() * 100) + 1;
-
-  let colorValue = getColorFromVariantOption(product);
-  let baseColor = colorMap[colorValue] || null;
-
-  if (!baseColor && product.images?.[0]?.src) {
-    const fallbackColor = await getColorFromImagga(product.images[0].src);
-    baseColor = colorMap[fallbackColor] || fallbackColor;
-    colorValue = fallbackColor;
-  }
-
-  const color1 = await getColorFromAirtable(baseColor, random1);
-  const color2 = await getColorFromAirtable(baseColor, random2);
-  const combinedNatureWords = [color1, color2].filter(Boolean).join(" ");
-
-  const metafields = [
-    {
-      namespace: "custom",
-      key: "product_color",
-      type: "single_line_text_field",
-      value: baseColor
-    },
-    {
-      namespace: "custom",
-      key: "random_number_1",
-      type: "single_line_text_field",
-      value: String(random1)
-    },
-    {
-      namespace: "custom",
-      key: "random_number_2",
-      type: "single_line_text_field",
-      value: String(random2)
-    },
-    {
-      namespace: "custom",
-      key: "nature_words",
-      type: "single_line_text_field",
-      value: combinedNatureWords || "Unknown"
-    }
-  ];
-
-  try {
-    for (const metafield of metafields) {
-      await axios.post(
-        `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
-        { metafield },
-        {
-          headers: {
-            "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN,
-            "Content-Type": "application/json"
+    if (originalColor !== normalized) {
+      try {
+        await axios.put(
+          `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/variants/${variant.id}.json`,
+          {
+            variant: {
+              id: variant.id,
+              [`option${colorOptionIndex + 1}`]: normalized
+            }
+          },
+          {
+            headers: {
+              "X-Shopify-Access-Token": process.env.SHOPIFY_ADMIN_TOKEN,
+              "Content-Type": "application/json"
+            }
           }
-        }
-      );
+        );
+        console.log(`✅ Updated variant ${variant.id} from "${originalColor}" to "${normalized}"`);
+      } catch (err) {
+        console.error(`❌ Failed to update variant ${variant.id}:`, err.response?.data || err.message);
+      }
     }
-
-    res.status(200).send("Metafields updated.");
-  } catch (err) {
-    console.error("Shopify metafield update error:", err.message);
-    res.status(500).send("Failed to update metafields.");
   }
-});
-
-app.get('/', (req, res) => {
-  res.send('✅ Shopify Color Webhook (Expanded Colors) is Live!');
-});
-
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-});
+};
