@@ -115,8 +115,8 @@ app.post('/webhooks/product-create', async (req, res) => {
     { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
     { namespace: 'custom', key: 'random_number_2', type: 'single_line_text_field', value: String(random2) },
     { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords },
-    { namespace: 'custom', key: 'gender', type: 'single_line_text_field', value: gender },
-    { namespace: 'custom', key: 'material_multi', type: 'single_line_text_field', value: materialMulti },
+    { namespace: 'custom', key: 'gender', type: 'list.single_line_text_field', value: gender },
+    { namespace: 'custom', key: 'material_multi', type: 'list.single_line_text_field', value: materialMulti },
     { namespace: 'custom', key: 'style', type: 'single_line_text_field', value: style }
   ];
 
