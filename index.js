@@ -37,36 +37,6 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
   }
 };
 
-const updateProductTitleAndHandle = async (productId, values) => {
-  const title = `${values.nature_words} ${values.gender} ${values.material_multi} ${values.style}`.trim().replace(/\s+/g, ' ');
-  const handle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-
-  console.log(`📝 Generated Title: "${title}"`);
-  console.log(`🔗 Generated Handle: "${handle}"`);
-
-  try {
-    await axios.put(
-      `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}.json`,
-      {
-        product: {
-          id: productId,
-          title,
-          handle
-        }
-      },
-      {
-        headers: {
-          'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-    console.log(`✅ Product title and handle updated`);
-  } catch (err) {
-    console.error("❌ Failed to update product title/handle:", err.response?.data || err.message);
-  }
-};
-
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
   const productId = product.id;
@@ -107,10 +77,6 @@ app.post('/webhooks/product-create', async (req, res) => {
     color2
   });
 
-  const gender = product.metafields?.custom?.gender?.value || '';
-  const materialMulti = product.metafields?.custom?.material_multi?.value || '';
-  const style = product.metafields?.custom?.style?.value || '';
-
   const metafields = [
     { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
     { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
@@ -135,13 +101,6 @@ app.post('/webhooks/product-create', async (req, res) => {
         console.warn(`⚠️ Could not update metafield '${metafield.key}':`, err.response?.data || err.message);
       }
     }
-
-    await updateProductTitleAndHandle(productId, {
-      nature_words: combinedNatureWords,
-      gender,
-      material_multi: materialMulti,
-      style
-    });
 
     res.status(200).send("✅ Product creation flow completed.");
   } catch (err) {
