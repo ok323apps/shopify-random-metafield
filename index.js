@@ -25,7 +25,7 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
 
     for (const r of rows) {
       if (r[0] && parseInt(r[0]) === row) {
-        return r[1] || null;
+        return r[1]?.trim() || null;
       }
     }
 
@@ -81,7 +81,7 @@ app.post('/webhooks/product-create', async (req, res) => {
 
   const colorOptionIndex = product.options.findIndex(o => o.name.toLowerCase() === 'color');
   const variant = product.variants[0];
-  const originalColor = variant[`option${colorOptionIndex + 1}`]?.toLowerCase() || '';
+  const originalColor = variant[`option${colorOptionIndex + 1}`]?.trim().toLowerCase() || '';
 
   let baseColor = 'Other';
 
@@ -90,14 +90,24 @@ app.post('/webhooks/product-create', async (req, res) => {
     try {
       const response = await axios.get(url);
       const rows = response.data.values || [];
-      const match = rows.some(r => r[1]?.toLowerCase() === originalColor);
-      if (match) {
-        baseColor = color;
-        break;
+
+      for (const r of rows) {
+        const sheetValue = r[1]?.trim().toLowerCase();
+        if (sheetValue === originalColor) {
+          baseColor = color;
+          console.log(`🎯 Matched "${originalColor}" to baseColor: ${baseColor}`);
+          break;
+        }
       }
+
+      if (baseColor !== 'Other') break;
     } catch (err) {
       console.warn(`❌ Error checking color match for ${color}:`, err.message);
     }
+  }
+
+  if (baseColor === 'Other') {
+    console.warn(`⚠️ No base color match found for variant color: "${originalColor}"`);
   }
 
   const random1 = Math.floor(Math.random() * 100) + 1;
@@ -115,20 +125,20 @@ app.post('/webhooks/product-create', async (req, res) => {
     color2
   });
 
-// Assume `product` is your Shopify product object with metafields already loaded
-const gender = product.metafields?.custom?.gender?.value || 'Unisex';
-const materialMulti = product.metafields?.custom?.material_multi?.value || 'Organic Cotton';
-const style = product.metafields?.custom?.style?.value || 'T-Shirt';
+  // Use existing metafield values if available
+  const gender = product.metafields?.custom?.gender?.value || 'Unisex';
+  const materialMulti = product.metafields?.custom?.material_multi?.value || 'Organic Cotton';
+  const style = product.metafields?.custom?.style?.value || 'T-Shirt';
 
-const metafields = [
-  { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
-  { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
-  { namespace: 'custom', key: 'random_number_2', type: 'single_line_text_field', value: String(random2) },
-  { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords },
-  { namespace: 'custom', key: 'gender', type: 'single_line_text_field', value: gender },
-  { namespace: 'custom', key: 'material_multi', type: 'single_line_text_field', value: materialMulti },
-  { namespace: 'custom', key: 'style', type: 'single_line_text_field', value: style }
-];
+  const metafields = [
+    { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
+    { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
+    { namespace: 'custom', key: 'random_number_2', type: 'single_line_text_field', value: String(random2) },
+    { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords },
+    { namespace: 'custom', key: 'gender', type: 'single_line_text_field', value: gender },
+    { namespace: 'custom', key: 'material_multi', type: 'single_line_text_field', value: materialMulti },
+    { namespace: 'custom', key: 'style', type: 'single_line_text_field', value: style }
+  ];
 
   try {
     for (const metafield of metafields) {
