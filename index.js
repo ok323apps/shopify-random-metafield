@@ -126,9 +126,9 @@ app.post('/webhooks/product-create', async (req, res) => {
   console.log("🎨 Nature Words Lookup:", { baseColor, random1, random2, color1, color2 });
 
   const metafields = [
-    { namespace: "custom", key: "product_color", type: "single_line_text_field", value: baseColor || "Other" },
     { namespace: "custom", key: "random_number_1", type: "single_line_text_field", value: String(random1) },
     { namespace: "custom", key: "random_number_2", type: "single_line_text_field", value: String(random2) },
+    { namespace: "custom", key: "product_color", type: "single_line_text_field", value: baseColor || "Other" },
     { namespace: "custom", key: "nature_words", type: "single_line_text_field", value: combinedNatureWords }
   ];
 
