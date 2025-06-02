@@ -1,11 +1,22 @@
 {
   "name": "shopify-random-metafield-app",
   "version": "1.0.0",
-  "description": "Assign random number to a metafield and update based on Airtable row",
+  "description": "A Shopify webhook handler that assigns a random number to a metafield and updates another metafield based on Airtable data.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
+  "keywords": [
+    "shopify",
+    "airtable",
+    "webhook",
+    "metafields",
+    "automation",
+    "nodejs",
+    "express"
+  ],
+  "author": "Your Name",
+  "license": "MIT",
   "dependencies": {
     "axios": "^1.6.7",
     "dotenv": "^16.3.1",
