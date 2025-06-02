@@ -9,7 +9,7 @@ app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
 
-// 🎨 Convert RGB to basic color name
+// 🎨 Convert RGB to a basic color name
 const rgbToColorName = (rgb) => {
   const [r, g, b] = rgb;
 
@@ -37,7 +37,7 @@ const getDominantColorName = async (imageUrl) => {
   }
 };
 
-// 📄 Get eco_fabric from Airtable
+// 📄 Get eco_fabric value from Airtable
 const getAirtableValue = async (tableName, rowNumber) => {
   try {
     const res = await axios.get(`https://api.airtable.com/v0/${process.env.AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`, {
@@ -57,7 +57,7 @@ const getAirtableValue = async (tableName, rowNumber) => {
   }
 };
 
-// 🚀 Shopify Product Creation Webhook
+// 🚀 Shopify Webhook Handler
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
 
@@ -70,7 +70,7 @@ app.post('/webhooks/product-create', async (req, res) => {
     : "Unknown";
 
   try {
-    // 🔹 Step 1: Update custom.product_color
+    // Step 1: Update Shopify with detected product_color
     await axios.post(
       `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
       {
@@ -89,25 +89,24 @@ app.post('/webhooks/product-create', async (req, res) => {
       }
     );
 
-    // 🔹 Step 2: Lookup Airtable using detected color
+    // Step 2: Get eco_fabric from Airtable based on colorName + random1
     const ecoFabric = await getAirtableValue(colorName, random1);
 
-    // 🔹 Step 3: Write random numbers and eco_fabric to metafields
-   const metafields = [
-  {
-    namespace: "custom",
-    key: "random_number_1",
-    type: "single_line_text_field",
-    value: String(random1)
-  },
-  {
-    namespace: "custom",
-    key: "random_number_2",
-    type: "single_line_text_field",
-    value: String(random2)
-  }
-];
-
+    // Step 3: Build metafields payload
+    const metafields = [
+      {
+        namespace: "custom",
+        key: "random_number_1",
+        type: "single_line_text_field",
+        value: String(random1)
+      },
+      {
+        namespace: "custom",
+        key: "random_number_2",
+        type: "single_line_text_field",
+        value: String(random2)
+      }
+    ];
 
     if (ecoFabric) {
       metafields.push({
@@ -118,6 +117,7 @@ app.post('/webhooks/product-create', async (req, res) => {
       });
     }
 
+    // Step 4: Post each metafield
     for (const metafield of metafields) {
       await axios.post(
         `https://${process.env.SHOPIFY_SHOP}/admin/api/${process.env.API_VERSION}/products/${product.id}/metafields.json`,
@@ -131,16 +131,15 @@ app.post('/webhooks/product-create', async (req, res) => {
       );
     }
 
-    res.status(200).send("Metafields updated with color and random numbers");
+    res.status(200).send("Metafields updated with color and random values.");
   } catch (err) {
     console.error("Shopify update error:", err.message);
-    res.status(500).send("Failed to update metafields");
+    res.status(500).send("Failed to update Shopify metafields");
   }
 });
 
-// Health check
 app.get('/', (req, res) => {
-  res.send('🎨 Shopify image color + metafield updater is live.');
+  res.send('🎨 Shopify color + metafield automation is live!');
 });
 
 app.listen(PORT, () => {
