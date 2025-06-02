@@ -4,6 +4,7 @@ const app = express();
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
+
 const SHOPIFY_SHOP = process.env.SHOPIFY_SHOP;
 const SHOPIFY_API_VERSION = process.env.API_VERSION;
 const SHOPIFY_ADMIN_TOKEN = process.env.SHOPIFY_ADMIN_TOKEN;
@@ -21,11 +22,13 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
     const response = await axios.get(url);
     const rows = response.data.values || [];
+
     for (const r of rows) {
       if (r[0] && parseInt(r[0]) === row) {
         return r[1] || null;
       }
     }
+
     console.warn(`⚠️ No nature word found for row ${row} in ${color}`);
     return null;
   } catch (err) {
@@ -34,24 +37,8 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
   }
 };
 
-const updateProductTitleAndHandle = async (productId, metafields) => {
-  const fields = ['nature_words', 'gender', 'material_multi', 'style'];
-  const values = {};
-  for (const field of fields) {
-    const metafield = metafields.find(m => m.key === field);
-    values[field] = metafield?.value || '';
-  }
-
-  const getFirst = (val) => {
-    try {
-      const arr = JSON.parse(val);
-      return Array.isArray(arr) ? arr[0] : val;
-    } catch {
-      return val;
-    }
-  };
-
-  const title = `${values.nature_words} ${getFirst(values.gender)} ${getFirst(values.material_multi)} ${values.style}`.trim().replace(/\s+/g, ' ');
+const updateProductTitleAndHandle = async (productId, values) => {
+  const title = `${values.nature_words} ${values.gender} ${values.material_multi} ${values.style}`.trim().replace(/\s+/g, ' ');
   const handle = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
   console.log(`📝 Generated Title: "${title}"`);
@@ -60,7 +47,13 @@ const updateProductTitleAndHandle = async (productId, metafields) => {
   try {
     await axios.put(
       `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}.json`,
-      { product: { id: productId, title, handle } },
+      {
+        product: {
+          id: productId,
+          title,
+          handle
+        }
+      },
       {
         headers: {
           'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
@@ -83,6 +76,7 @@ app.post('/webhooks/product-create', async (req, res) => {
   const originalColor = variant[`option${colorOptionIndex + 1}`]?.toLowerCase() || '';
 
   let baseColor = 'Other';
+
   for (const color of allowedColors) {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
     try {
@@ -100,24 +94,28 @@ app.post('/webhooks/product-create', async (req, res) => {
 
   const random1 = Math.floor(Math.random() * 100) + 1;
   const random2 = Math.floor(Math.random() * 100) + 1;
+
   const color1 = await fetchNatureWordFromGoogleSheets(baseColor, random1);
   const color2 = await fetchNatureWordFromGoogleSheets(baseColor, random2);
   const combinedNatureWords = [color1, color2].filter(Boolean).join(' ') || 'Unknown';
 
-  console.log("🎨 Nature Words Lookup:", { baseColor, random1, random2, color1, color2 });
+  console.log("🎨 Nature Words Lookup:", {
+    baseColor,
+    random1,
+    random2,
+    color1,
+    color2
+  });
 
-  const gender = product.metafields?.custom?.gender?.value || 'Unisex';
-  const materialMulti = product.metafields?.custom?.material_multi?.value || 'Organic Cotton';
-  const style = product.metafields?.custom?.style?.value || 'T-Shirt';
+  const gender = product.metafields?.custom?.gender?.value || '';
+  const materialMulti = product.metafields?.custom?.material_multi?.value || '';
+  const style = product.metafields?.custom?.style?.value || '';
 
   const metafields = [
     { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
     { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
     { namespace: 'custom', key: 'random_number_2', type: 'single_line_text_field', value: String(random2) },
-    { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords },
-    { namespace: 'custom', key: 'gender', type: 'list.single_line_text_field', value: gender },
-    { namespace: 'custom', key: 'material_multi', type: 'list.single_line_text_field', value: materialMulti },
-    { namespace: 'custom', key: 'style', type: 'single_line_text_field', value: style }
+    { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords }
   ];
 
   try {
@@ -138,7 +136,13 @@ app.post('/webhooks/product-create', async (req, res) => {
       }
     }
 
-    await updateProductTitleAndHandle(productId, metafields);
+    await updateProductTitleAndHandle(productId, {
+      nature_words: combinedNatureWords,
+      gender,
+      material_multi: materialMulti,
+      style
+    });
+
     res.status(200).send("✅ Product creation flow completed.");
   } catch (err) {
     console.error("❌ Product creation error:", err.message);
