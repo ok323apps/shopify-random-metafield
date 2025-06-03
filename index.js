@@ -37,38 +37,35 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
   }
 };
 
+const identifyBaseColor = async (originalColor) => {
+  for (const color of allowedColors) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+    try {
+      const response = await axios.get(url);
+      const rows = response.data.values || [];
+      const match = rows.some(r => r[1]?.toLowerCase() === originalColor);
+      if (match) return color;
+
+      const synonyms = rows.map(r => r[1]?.toLowerCase()).filter(Boolean);
+      const originalWords = originalColor.toLowerCase().split(/\s+/);
+      const synonymMatch = originalWords.some(word => synonyms.includes(word));
+      if (synonymMatch) return color;
+    } catch (err) {
+      console.warn(`❌ Error checking color match for ${color}:`, err.message);
+    }
+  }
+  return 'Other';
+};
+
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
   const productId = product.id;
 
   const colorOptionIndex = product.options.findIndex(o => o.name.toLowerCase() === 'color');
   const variant = product.variants[0];
-  const originalColor = variant[`option${colorOptionIndex + 1}`]?.trim() || '';
+  const originalColor = variant[`option${colorOptionIndex + 1}`]?.toLowerCase() || '';
 
-  let baseColor = allowedColors.find(c => c.toLowerCase() === originalColor.toLowerCase());
-
-  if (!baseColor) {
-    const parts = originalColor.toLowerCase().split(/\s+/);
-
-    for (const color of allowedColors) {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
-      try {
-        const response = await axios.get(url);
-        const rows = response.data.values || [];
-
-        const sheetWords = rows.map(r => r[1]?.toLowerCase().trim()).filter(Boolean);
-
-        if (parts.some(part => sheetWords.includes(part))) {
-          baseColor = color;
-          break;
-        }
-      } catch (err) {
-        console.warn(`❌ Error checking color match for ${color}:`, err.message);
-      }
-    }
-  }
-
-  if (!baseColor) baseColor = 'Other';
+  const baseColor = await identifyBaseColor(originalColor);
 
   const random1 = Math.floor(Math.random() * 100) + 1;
   const random2 = Math.floor(Math.random() * 100) + 1;
@@ -76,14 +73,6 @@ app.post('/webhooks/product-create', async (req, res) => {
   const color1 = await fetchNatureWordFromGoogleSheets(baseColor, random1);
   const color2 = await fetchNatureWordFromGoogleSheets(baseColor, random2);
   const combinedNatureWords = [color1, color2].filter(Boolean).join(' ') || 'Unknown';
-
-  console.log("🎨 Nature Words Lookup:", {
-    baseColor,
-    random1,
-    random2,
-    color1,
-    color2
-  });
 
   const metafields = [
     { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
@@ -107,6 +96,31 @@ app.post('/webhooks/product-create', async (req, res) => {
         );
       } catch (err) {
         console.warn(`⚠️ Could not update metafield '${metafield.key}':`, err.response?.data || err.message);
+      }
+    }
+
+    // Update variant option only if it's not already an allowed color
+    if (!allowedColors.includes(originalColor.charAt(0).toUpperCase() + originalColor.slice(1))) {
+      const updatedOption = baseColor;
+      try {
+        await axios.put(
+          `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${variant.id}.json`,
+          {
+            variant: {
+              id: variant.id,
+              [`option${colorOptionIndex + 1}`]: updatedOption
+            }
+          },
+          {
+            headers: {
+              'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+        console.log(`✅ Updated variant option to '${updatedOption}'`);
+      } catch (err) {
+        console.error(`❌ Failed to update variant option:`, err.response?.data || err.message);
       }
     }
 
