@@ -137,25 +137,41 @@ app.post('/webhooks/product-create', async (req, res) => {
           }
         );
 
-        const variantsToDelete = variantsRes.data.variants.filter(v => {
-          const colorVal = v[`option${colorOptionIndex + 1}`];
-          return colorVal && colorVal.toLowerCase() === 'deep teal';
-        });
+        if (colorOptionIndex < 0) {
+          console.warn("⚠️ Color option index not found, skipping duplicate variant deletion.");
+        } else {
+          const variantsToDelete = variantsRes.data.variants.filter(v => {
+            const colorValRaw = v[`option${colorOptionIndex + 1}`];
+            if (!colorValRaw) return false;
+            const colorVal = colorValRaw.toLowerCase().trim();
+            return colorVal === 'deep teal';
+          });
 
-        for (const v of variantsToDelete) {
-          await axios.delete(
-            `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${v.id}.json`,
-            {
-              headers: {
-                'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN
+          if (variantsToDelete.length === 0) {
+            console.log("ℹ️ No duplicate 'Deep Teal' variants found to delete.");
+          } else {
+            for (const v of variantsToDelete) {
+              try {
+                await axios.delete(
+                  `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${v.id}.json`,
+                  {
+                    headers: {
+                      'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN
+                    }
+                  }
+                );
+                console.log(`🗑️ Deleted duplicate variant: ID ${v.id}, Color 'Deep Teal'`);
+                // Optional: delay 200ms between deletes to avoid rate limits
+                // await new Promise(r => setTimeout(r, 200));
+              } catch (delErr) {
+                console.error(`❌ Failed to delete variant ID ${v.id}:`, delErr.response?.data || delErr.message);
               }
             }
-          );
-          console.log(`🗑️ Deleted duplicate variant: ID ${v.id}, Color 'Deep Teal'`);
+          }
         }
         // === END FIX ===
 
-        // 🧹 Clean up duplicate color option values
+        // 🧹 Clean up duplicate color option values after deletion
         const updatedVariantsRes = await axios.get(
           `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/variants.json`,
           {
@@ -189,6 +205,7 @@ app.post('/webhooks/product-create', async (req, res) => {
         );
 
         console.log(`✅ Cleaned up duplicate option values:`, uniqueColorValues);
+
       } catch (err) {
         console.warn(`⚠️ Could not update variant color or clean options:`, err.response?.data || err.message);
       }
