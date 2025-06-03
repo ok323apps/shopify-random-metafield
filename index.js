@@ -37,38 +37,41 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
   }
 };
 
+const findBaseColor = async (originalColor) => {
+  const parts = originalColor.toLowerCase().split(/\s+/);
+
+  for (const color of allowedColors) {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+    try {
+      const response = await axios.get(url);
+      const rows = response.data.values || [];
+      const sheetWords = rows.map(r => r[1]?.toLowerCase().trim()).filter(Boolean);
+
+      if (parts.some(part => sheetWords.includes(part))) {
+        return color;
+      }
+    } catch (err) {
+      console.warn(`❌ Error checking color match for ${color}:`, err.message);
+    }
+  }
+
+  return allowedColors.find(c => c.toLowerCase() === originalColor.toLowerCase()) || 'Other';
+};
+
 app.post('/webhooks/product-create', async (req, res) => {
   const product = req.body;
   const productId = product.id;
 
   const colorOptionIndex = product.options.findIndex(o => o.name.toLowerCase() === 'color');
+  if (colorOptionIndex === -1) {
+    console.warn("⚠️ No color option found in product");
+    return res.status(400).send("No color option found");
+  }
+
   const variant = product.variants[0];
   const originalColor = variant[`option${colorOptionIndex + 1}`]?.trim() || '';
 
-  let baseColor = allowedColors.find(c => c.toLowerCase() === originalColor.toLowerCase());
-
-  if (!baseColor) {
-    const parts = originalColor.toLowerCase().split(/\s+/);
-
-    for (const color of allowedColors) {
-      const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
-      try {
-        const response = await axios.get(url);
-        const rows = response.data.values || [];
-
-        const sheetWords = rows.map(r => r[1]?.toLowerCase().trim()).filter(Boolean);
-
-        if (parts.some(part => sheetWords.includes(part))) {
-          baseColor = color;
-          break;
-        }
-      } catch (err) {
-        console.warn(`❌ Error checking color match for ${color}:`, err.message);
-      }
-    }
-  }
-
-  if (!baseColor) baseColor = 'Other';
+  const baseColor = await findBaseColor(originalColor);
 
   const random1 = Math.floor(Math.random() * 100) + 1;
   const random2 = Math.floor(Math.random() * 100) + 1;
@@ -93,6 +96,7 @@ app.post('/webhooks/product-create', async (req, res) => {
   ];
 
   try {
+    // Create/update metafields
     for (const metafield of metafields) {
       try {
         await axios.post(
