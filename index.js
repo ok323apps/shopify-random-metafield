@@ -19,7 +19,7 @@ const allowedColors = [
 
 const fetchNatureWordFromGoogleSheets = async (color, row) => {
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+    const url = https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY};
     const response = await axios.get(url);
     const rows = response.data.values || [];
 
@@ -29,10 +29,10 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
       }
     }
 
-    console.warn(`⚠️ No nature word found for row ${row} in ${color}`);
+    console.warn(⚠️ No nature word found for row ${row} in ${color});
     return null;
   } catch (err) {
-    console.error(`Google Sheets fetch error for ${row} in ${color}:`, err.response?.data || err.message);
+    console.error(Google Sheets fetch error for ${row} in ${color}:, err.response?.data || err.message);
     return null;
   }
 };
@@ -41,7 +41,7 @@ const findBaseColor = async (originalColor) => {
   const parts = originalColor.toLowerCase().split(/\s+/);
 
   for (const color of allowedColors) {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+    const url = https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY};
     try {
       const response = await axios.get(url);
       const rows = response.data.values || [];
@@ -51,7 +51,7 @@ const findBaseColor = async (originalColor) => {
         return color;
       }
     } catch (err) {
-      console.warn(`❌ Error checking color match for ${color}:`, err.message);
+      console.warn(❌ Error checking color match for ${color}:, err.message);
     }
   }
 
@@ -63,13 +63,8 @@ app.post('/webhooks/product-create', async (req, res) => {
   const productId = product.id;
 
   const colorOptionIndex = product.options.findIndex(o => o.name.toLowerCase() === 'color');
-  if (colorOptionIndex === -1) {
-    console.warn("⚠️ No color option found in product");
-    return res.status(400).send("No color option found");
-  }
-
   const variant = product.variants[0];
-  const originalColor = variant[`option${colorOptionIndex + 1}`]?.trim() || '';
+  const originalColor = variant[option${colorOptionIndex + 1}]?.trim() || '';
 
   const baseColor = await findBaseColor(originalColor);
 
@@ -96,11 +91,10 @@ app.post('/webhooks/product-create', async (req, res) => {
   ];
 
   try {
-    // Create/update metafields
     for (const metafield of metafields) {
       try {
         await axios.post(
-          `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/metafields.json`,
+          https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/metafields.json,
           { metafield },
           {
             headers: {
@@ -110,20 +104,19 @@ app.post('/webhooks/product-create', async (req, res) => {
           }
         );
       } catch (err) {
-        console.warn(`⚠️ Could not update metafield '${metafield.key}':`, err.response?.data || err.message);
+        console.warn(⚠️ Could not update metafield '${metafield.key}':, err.response?.data || err.message);
       }
     }
 
-    // Update variant option value if it differs from baseColor
+    // Update variant option value if needed
     if (originalColor.toLowerCase() !== baseColor.toLowerCase()) {
       try {
-        // Update the variant's color option to baseColor
         await axios.put(
-          `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${variant.id}.json`,
+          https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${variant.id}.json,
           {
             variant: {
               id: variant.id,
-              [`option${colorOptionIndex + 1}`]: baseColor
+              [option${colorOptionIndex + 1}]: baseColor
             }
           },
           {
@@ -133,38 +126,8 @@ app.post('/webhooks/product-create', async (req, res) => {
             }
           }
         );
-
-        // Fetch all variants to find duplicates with the originalColor
-        const variantsRes = await axios.get(
-          `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/variants.json`,
-          {
-            headers: { 'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN }
-          }
-        );
-
-        const variants = variantsRes.data.variants;
-
-        // Identify variants that still have the old originalColor option value
-        const originalColorVariants = variants.filter(v =>
-          v[`option${colorOptionIndex + 1}`]?.toLowerCase() === originalColor.toLowerCase()
-        );
-
-        // Delete each variant with the duplicate original color
-        for (const v of originalColorVariants) {
-          try {
-            await axios.delete(
-              `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${v.id}.json`,
-              {
-                headers: { 'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN }
-              }
-            );
-            console.log(`🗑️ Deleted variant ID ${v.id} with old color "${originalColor}"`);
-          } catch (delErr) {
-            console.warn(`⚠️ Failed to delete variant ID ${v.id}:`, delErr.response?.data || delErr.message);
-          }
-        }
       } catch (err) {
-        console.warn(`⚠️ Could not update variant color or delete duplicates:`, err.response?.data || err.message);
+        console.warn(⚠️ Could not update variant color to '${baseColor}':, err.response?.data || err.message);
       }
     }
 
@@ -176,5 +139,5 @@ app.post('/webhooks/product-create', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(🚀 Server running on port ${PORT});
 });
