@@ -148,7 +148,11 @@ app.post('/webhooks/product-create', async (req, res) => {
         variantsRes.data.variants.forEach(v => {
           product.options.forEach((opt, index) => {
             const val = v[`option${index + 1}`];
-            if (val) allOptionValues[opt.name].add(val);
+            if (val && (index === colorOptionIndex && val.toLowerCase() === baseColor.toLowerCase())) {
+              allOptionValues[opt.name].add(val);
+            } else if (index !== colorOptionIndex) {
+              allOptionValues[opt.name].add(val);
+            }
           });
         });
 
