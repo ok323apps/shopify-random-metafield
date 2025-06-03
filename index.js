@@ -43,24 +43,32 @@ app.post('/webhooks/product-create', async (req, res) => {
 
   const colorOptionIndex = product.options.findIndex(o => o.name.toLowerCase() === 'color');
   const variant = product.variants[0];
-  const originalColor = variant[`option${colorOptionIndex + 1}`]?.toLowerCase() || '';
+  const originalColor = variant[`option${colorOptionIndex + 1}`]?.trim() || '';
 
-  let baseColor = 'Other';
+  let baseColor = allowedColors.find(c => c.toLowerCase() === originalColor.toLowerCase());
 
-  for (const color of allowedColors) {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
-    try {
-      const response = await axios.get(url);
-      const rows = response.data.values || [];
-      const match = rows.some(r => r[1]?.toLowerCase() === originalColor);
-      if (match) {
-        baseColor = color;
-        break;
+  if (!baseColor) {
+    const parts = originalColor.toLowerCase().split(/\s+/);
+
+    for (const color of allowedColors) {
+      const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+      try {
+        const response = await axios.get(url);
+        const rows = response.data.values || [];
+
+        const sheetWords = rows.map(r => r[1]?.toLowerCase().trim()).filter(Boolean);
+
+        if (parts.some(part => sheetWords.includes(part))) {
+          baseColor = color;
+          break;
+        }
+      } catch (err) {
+        console.warn(`❌ Error checking color match for ${color}:`, err.message);
       }
-    } catch (err) {
-      console.warn(`❌ Error checking color match for ${color}:`, err.message);
     }
   }
+
+  if (!baseColor) baseColor = 'Other';
 
   const random1 = Math.floor(Math.random() * 100) + 1;
   const random2 = Math.floor(Math.random() * 100) + 1;
