@@ -126,11 +126,8 @@ app.post('/webhooks/product-create', async (req, res) => {
             }
           }
         );
-      } catch (err) {
-        console.warn(`⚠️ Could not update variant color to '${baseColor}':`, err.response?.data || err.message);
-      }
 
-      try {
+        // 🧹 Clean up duplicate color option values
         const variantsRes = await axios.get(
           `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/variants.json`,
           {
@@ -140,40 +137,19 @@ app.post('/webhooks/product-create', async (req, res) => {
           }
         );
 
-        const allOptionValues = {};
-        product.options.forEach(opt => {
-          allOptionValues[opt.name] = new Set();
-        });
-
-        variantsRes.data.variants.forEach(v => {
-          product.options.forEach((opt, index) => {
-            const val = v[`option${index + 1}`];
-            if (val && (index === colorOptionIndex && val.toLowerCase() === baseColor.toLowerCase())) {
-              allOptionValues[opt.name].add(val);
-            } else if (index !== colorOptionIndex) {
-              allOptionValues[opt.name].add(val);
-            }
-          });
-        });
-
-        const cleanedOptions = product.options.map((opt, index) => {
-          if (index === colorOptionIndex) {
-            return {
-              name: opt.name,
-              position: index + 1,
-              values: Array.from(allOptionValues[opt.name])
-            };
-          } else {
-            return opt;
-          }
-        });
+        const colorValues = variantsRes.data.variants.map(v => v[`option${colorOptionIndex + 1}`]).filter(Boolean);
+        const uniqueColorValues = [...new Set(colorValues)];
 
         await axios.put(
           `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}.json`,
           {
             product: {
               id: productId,
-              options: cleanedOptions
+              options: product.options.map((opt, index) =>
+                index === colorOptionIndex
+                  ? { ...opt, values: uniqueColorValues }
+                  : opt
+              )
             }
           },
           {
@@ -183,8 +159,10 @@ app.post('/webhooks/product-create', async (req, res) => {
             }
           }
         );
+
+        console.log(`✅ Cleaned up duplicate option values:`, uniqueColorValues);
       } catch (err) {
-        console.warn("⚠️ Could not clean up color options:", err.response?.data || err.message);
+        console.warn(`⚠️ Could not update variant color or clean options:`, err.response?.data || err.message);
       }
     }
 
