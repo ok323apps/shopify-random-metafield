@@ -19,7 +19,7 @@ const allowedColors = [
 
 const fetchNatureWordFromGoogleSheets = async (color, row) => {
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+    const url = https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY};
     const response = await axios.get(url);
     const rows = response.data.values || [];
 
@@ -29,23 +29,19 @@ const fetchNatureWordFromGoogleSheets = async (color, row) => {
       }
     }
 
-    console.warn(`⚠️ No nature word found for row ${row} in ${color}`);
+    console.warn(⚠️ No nature word found for row ${row} in ${color});
     return null;
   } catch (err) {
-    console.error(`Google Sheets fetch error for ${row} in ${color}:`, err.response?.data || err.message);
+    console.error(Google Sheets fetch error for ${row} in ${color}:, err.response?.data || err.message);
     return null;
   }
 };
 
 const findBaseColor = async (originalColor) => {
-  const lowerOriginal = originalColor.toLowerCase().trim();
+  const parts = originalColor.toLowerCase().split(/\s+/);
 
-  const directMatch = allowedColors.find(c => c.toLowerCase() === lowerOriginal);
-  if (directMatch) return directMatch;
-
-  const parts = lowerOriginal.split(/\s+/);
   for (const color of allowedColors) {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY}`;
+    const url = https://sheets.googleapis.com/v4/spreadsheets/${GOOGLE_SHEETS_ID}/values/${encodeURIComponent(color)}!A:B?key=${GOOGLE_SHEETS_API_KEY};
     try {
       const response = await axios.get(url);
       const rows = response.data.values || [];
@@ -55,11 +51,11 @@ const findBaseColor = async (originalColor) => {
         return color;
       }
     } catch (err) {
-      console.warn(`❌ Error checking color match for ${color}:`, err.message);
+      console.warn(❌ Error checking color match for ${color}:, err.message);
     }
   }
 
-  return 'Other';
+  return allowedColors.find(c => c.toLowerCase() === originalColor.toLowerCase()) || 'Other';
 };
 
 app.post('/webhooks/product-create', async (req, res) => {
@@ -68,7 +64,7 @@ app.post('/webhooks/product-create', async (req, res) => {
 
   const colorOptionIndex = product.options.findIndex(o => o.name.toLowerCase() === 'color');
   const variant = product.variants[0];
-  const originalColor = variant[`option${colorOptionIndex + 1}`]?.trim() || '';
+  const originalColor = variant[option${colorOptionIndex + 1}]?.trim() || '';
 
   const baseColor = await findBaseColor(originalColor);
 
@@ -80,7 +76,6 @@ app.post('/webhooks/product-create', async (req, res) => {
   const combinedNatureWords = [color1, color2].filter(Boolean).join(' ') || 'Unknown';
 
   console.log("🎨 Nature Words Lookup:", {
-    originalColor,
     baseColor,
     random1,
     random2,
@@ -88,30 +83,6 @@ app.post('/webhooks/product-create', async (req, res) => {
     color2
   });
 
-  // Update variant color option if mismatched
-  if (baseColor && baseColor !== originalColor) {
-    try {
-      await axios.put(
-        `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${variant.id}.json`,
-        {
-          variant: {
-            id: variant.id,
-            [`option${colorOptionIndex + 1}`]: baseColor
-          }
-        },
-        {
-          headers: {
-            'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
-            'Content-Type': 'application/json'
-          }
-        }
-      );
-    } catch (err) {
-      console.warn(`⚠️ Could not update variant color to '${baseColor}':`, err.response?.data || err.message);
-    }
-  }
-
-  // Update color-based metafields
   const metafields = [
     { namespace: 'custom', key: 'product_color', type: 'single_line_text_field', value: baseColor },
     { namespace: 'custom', key: 'random_number_1', type: 'single_line_text_field', value: String(random1) },
@@ -119,26 +90,54 @@ app.post('/webhooks/product-create', async (req, res) => {
     { namespace: 'custom', key: 'nature_words', type: 'single_line_text_field', value: combinedNatureWords }
   ];
 
-  for (const metafield of metafields) {
-    try {
-      await axios.post(
-        `https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/metafields.json`,
-        { metafield },
-        {
-          headers: {
-            'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
-            'Content-Type': 'application/json'
+  try {
+    for (const metafield of metafields) {
+      try {
+        await axios.post(
+          https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/products/${productId}/metafields.json,
+          { metafield },
+          {
+            headers: {
+              'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
+              'Content-Type': 'application/json'
+            }
           }
-        }
-      );
-    } catch (err) {
-      console.warn(`⚠️ Could not update metafield '${metafield.key}':`, err.response?.data || err.message);
+        );
+      } catch (err) {
+        console.warn(⚠️ Could not update metafield '${metafield.key}':, err.response?.data || err.message);
+      }
     }
-  }
 
-  res.status(200).send("✅ Product creation flow completed.");
+    // Update variant option value if needed
+    if (originalColor.toLowerCase() !== baseColor.toLowerCase()) {
+      try {
+        await axios.put(
+          https://${SHOPIFY_SHOP}/admin/api/${SHOPIFY_API_VERSION}/variants/${variant.id}.json,
+          {
+            variant: {
+              id: variant.id,
+              [option${colorOptionIndex + 1}]: baseColor
+            }
+          },
+          {
+            headers: {
+              'X-Shopify-Access-Token': SHOPIFY_ADMIN_TOKEN,
+              'Content-Type': 'application/json'
+            }
+          }
+        );
+      } catch (err) {
+        console.warn(⚠️ Could not update variant color to '${baseColor}':, err.response?.data || err.message);
+      }
+    }
+
+    res.status(200).send("✅ Product creation flow completed.");
+  } catch (err) {
+    console.error("❌ Product creation error:", err.message);
+    res.status(500).send("❌ Product creation failed.");
+  }
 });
 
 app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+  console.log(🚀 Server running on port ${PORT});
 });
